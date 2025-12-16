@@ -40,18 +40,22 @@ function connect(){
 }
 
 function sendLed(v) {
-  // Check if the WebSocket is not open yet before attempting to connect
+  // Verifică dacă WebSocket-ul este deschis
   if (!ws || ws.readyState !== 1) {
-    connect(); // connect if it's not already connected
-    setTimeout(() => sendLed(v), 400); // retry after a short delay
+    connect(); // Se reconectează dacă nu este deschis
+    setTimeout(() => sendLed(v), 400); // Reîncearcă după o mică întârziere
     return;
   }
+
   const to = document.getElementById('dev').value.trim();
+  
+  // Trimite comanda pentru LED
   ws.send(JSON.stringify({ to, cmd: "led", value: v }));
   console.log("=> led " + v + " to " + to);
 }
 
-connect(); // Initial connection at the start
+// Conectează automat atunci când scriptul este încărcat
+connect(); 
 
 </script>
 </body>
