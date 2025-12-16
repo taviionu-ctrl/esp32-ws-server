@@ -22,23 +22,28 @@
 
 <script>
 let ws;
+
 function connect(){
   ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws?role=controller");
+  
   ws.onopen = () => {
     document.getElementById('state').textContent = "Connected";
   };
+
   ws.onclose = () => {
     document.getElementById('state').textContent = "Disconnected";
   };
+
   ws.onmessage = (e) => {
     console.log("<= " + e.data);
   };
 }
 
 function sendLed(v) {
+  // Check if the WebSocket is not open yet before attempting to connect
   if (!ws || ws.readyState !== 1) {
-    connect();
-    setTimeout(() => sendLed(v), 400);
+    connect(); // connect if it's not already connected
+    setTimeout(() => sendLed(v), 400); // retry after a short delay
     return;
   }
   const to = document.getElementById('dev').value.trim();
@@ -46,7 +51,8 @@ function sendLed(v) {
   console.log("=> led " + v + " to " + to);
 }
 
-connect();
+connect(); // Initial connection at the start
+
 </script>
 </body>
 </html>
