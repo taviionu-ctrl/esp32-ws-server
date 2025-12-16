@@ -33,7 +33,13 @@ function connect(){
   ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws?role=controller&token="+encodeURIComponent(tok));
   ws.onopen=()=>{ document.getElementById('state').textContent="Connected"; log("connected"); };
   ws.onclose=()=>{ document.getElementById('state').textContent="Disconnected"; log("closed"); };
-  ws.onmessage=(e)=>log("<= "+e.data);
+ ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.type !== 'hello') { // Adăugăm un filtru pentru a nu afișa mesajele de tip "hello"
+    log("<= " + e.data);
+  }
+};
+
 }
 function sendLed(v){
   if(!ws || ws.readyState!==1){ connect(); setTimeout(()=>sendLed(v), 400); return; }
