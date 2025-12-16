@@ -1,10 +1,8 @@
 import http from "http";
 import { WebSocketServer } from "ws";
-import url from "url";
 
-// Setează portul și token-ul (poți adăuga un token pentru securitate dacă vrei)
+// Setează portul
 const PORT = process.env.PORT || 3000;
-const API_TOKEN = process.env.API_TOKEN || "schimba-ma"; // Poți schimba token-ul aici
 
 const server = http.createServer((req, res) => {
   if (req.url === "/") {
@@ -30,17 +28,7 @@ server.on("upgrade", (req, socket, head) => {
   });
 });
 
-wss.on("connection", (ws, req) => {
-  const parsed = url.parse(req.url, true);
-  const token = String(parsed.query.token || "");
-
-  // Verifică token-ul pentru autentificare (opțional)
-  if (token !== API_TOKEN) {
-    ws.close(1008, "bad token");
-    return;
-  }
-
-  // Ascultă mesajele trimise de la client
+wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     let data;
     try {
@@ -56,13 +44,9 @@ wss.on("connection", (ws, req) => {
     if (cmd === "led" && (value === 0 || value === 1)) {
       // Aici poți să pui logica pentru a aprinde/opri LED-ul
       console.log(`LED ${value === 1 ? "ON" : "OFF"}`);
-
-      // Dacă vrei, trimite feedback clientului
-      ws.send(JSON.stringify({ type: "ok", cmd, value }));
     }
   });
 
-  // La închidere conexiune
   ws.on("close", () => {
     console.log("Client disconnected");
   });
