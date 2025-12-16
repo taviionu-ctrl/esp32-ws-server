@@ -7,7 +7,14 @@ const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
   if (req.url === "/") {
     res.writeHead(200, { "content-type": "text/plain" });
-    return res.end("WebSocket endpoint: /ws\n");
+    return res.end("OK. WebSocket endpoint: /ws\n");
+  }
+
+  if (req.url === "/control") {
+    const filePath = path.join(process.cwd(), "control.html");
+    const html = fs.readFileSync(filePath, "utf8");
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(html);
   }
 
   res.writeHead(404);
