@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import http from "http";
 import { WebSocketServer } from "ws";
 import url from "url";
@@ -6,57 +8,142 @@ const PORT = process.env.PORT || 3000;
 const API_TOKEN = process.env.API_TOKEN || "schimba-ma";
 
 const server = http.createServer((req, res) => {
+  console.log(`Request URL: ${req.url}`); // Log pentru orice cerere
+  console.log("Headers: ", req.headers); // Detalii headers
+  console.log("Method: ", req.method); // Detalii metodă cerere
+
+  // Rutele
   if (req.url === "/") {
     res.writeHead(200, { "content-type": "text/plain" });
-    return res.end("OK. WebSocket endpoint: /ws");
+    return res.end("OK. WebSocket endpoint: /ws\n");
   }
+
+  if (req.url === "/control") {
+    console.log("Request for /control received");
+    const filePath = path.join(process.cwd(), "control.html");
+    const html = fs.readFileSync(filePath, "utf8");
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    return res.end(html);
+  }
+
   res.writeHead(404);
-  res.end();
+  res.end("Not found");
 });
 
+
 const wss = new WebSocketServer({ noServer: true });
-const devices = new Map();
+const devices = new Map(); // id -> ws
 
 server.on("upgrade", (req, socket, head) => {
-  const { pathname, query } = url.parse(req.url, true);
-
-  if (pathname !== "/ws" || query.token !== API_TOKEN) {
+  const { pathname } = url.parse(req.url);
+  if (pathname !== "/ws") {
     socket.destroy();
     return;
   }
-
   wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit("connection", ws, query);
+    wss.emit("connection", ws, req);
   });
 });
 
-wss.on("connection", (ws, query) => {
-  const role = query.role || "web";
-  const deviceId = query.id || "esp32";
+wss.on("connection", (ws, req) => {
+  const parsed = url.parse(req.url, true);
+  const q = parsed.query || {};
+  const role = String(q.role || "");
+  const id = String(q.id || "");
+  const token = String(q.token || "");
 
-  if (role === "device") {
-    devices.set(deviceId, ws);
-    ws.send("HELLO_DEVICE");
-  } else {
-    ws.send("HELLO_WEB");
+  // minimal auth: obligatoriu token corect pentru ORICE
+  if (token !== API_TOKEN) {
+    ws.close(1008, "bad token");
+    return;
   }
 
-  ws.on("message", (msg) => {
-    if (role === "web") {
-      const dev = devices.get(deviceId);
-      if (dev && dev.readyState === dev.OPEN) {
-        dev.send(msg.toString());
-      }
+  if (role === "device") {
+    if (!id) {
+      ws.close(1008, "missing id");
+      return;
     }
-  });
+    devices.set(id, ws);
+    ws.send(JSON.stringify({ type: "hello", role: "device", id }));
+    ws.on("close", () => devices.delete(id));
+    ws.on("message", (msg) => {
+      // optional: device status
+      // console.log("device", id, msg.toString());
+    });
+    return;
+  }
 
-  ws.on("close", () => {
-    if (role === "device" && devices.get(deviceId) === ws) {
-      devices.delete(deviceId);
+  // controller
+  ws.send(JSON.stringify({ type: "hello", role: "controller" }));
+
+  ws.on("message", (msg) => {
+    let data;
+    try { data = JSON.parse(msg.toString()); } catch { return; }
+
+    const to = String(data.to || "");
+    const cmd = String(data.cmd || "");
+    const value = Number(data.value);
+
+    if (!to || cmd !== "led" || !(value === 0 || value === 1)) return;
+
+    const dev = devices.get(to);
+    if (!dev || dev.readyState !== 1) {
+      ws.send(JSON.stringify({ type: "err", msg: "device offline" }));
+      return;
     }
+
+    dev.send(JSON.stringify({ cmd: "led", value }));
+    ws.send(JSON.stringify({ type: "ok", to, cmd, value }));
   });
 });
 
 server.listen(PORT, () => {
   console.log("Listening on", PORT);
 });
+
+const CONTROL_HTML = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ESP32 Control</title>
+  <style>
+    body{font-family:system-ui;margin:24px;max-width:520px}
+    button{font-size:18px;padding:12px 18px;margin-right:10px;cursor:pointer}
+    input{font-size:16px;padding:10px;width:100%;margin:10px 0}
+    #log{white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <h2>ESP32 LED Control</h2>
+  <label>Device ID (ex: esp1)</label>
+  <input id="dev" value="esp1" />
+  <label>Token</label>
+  <input id="tok" placeholder="API_TOKEN" />
+  <div>
+    <button onclick="sendLed(1)">LED ON</button>
+    <button onclick="sendLed(0)">LED OFF</button>
+  </div>
+  <p id="state">Disconnected</p>
+  <div id="log"></div>
+
+<script>
+let ws;
+function log(s){ document.getElementById('log').textContent += s + "\\n"; }
+function connect(){
+  const tok = document.getElementById('tok').value.trim();
+  if(!tok){ alert("Pune token-ul"); return; }
+  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws?role=controller&token="+encodeURIComponent(tok));
+  ws.onopen=()=>{ document.getElementById('state').textContent="Connected"; log("connected"); };
+  ws.onclose=()=>{ document.getElementById('state').textContent="Disconnected"; log("closed"); };
+  ws.onmessage=(e)=>log("<= "+e.data);
+}
+function sendLed(v){
+  if(!ws || ws.readyState!==1){ connect(); setTimeout(()=>sendLed(v), 400); return; }
+  const to = document.getElementById('dev').value.trim();
+  ws.send(JSON.stringify({to, cmd:"led", value:v}));
+  log("=> led "+v+" to "+to);
+}
+</script>
+</body>
+</html>`;
