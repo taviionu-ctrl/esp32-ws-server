@@ -7,38 +7,29 @@
   <style>
     body{font-family:system-ui;margin:24px;max-width:520px}
     button{font-size:18px;padding:12px 18px;margin-right:10px;cursor:pointer}
-    #log{white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:8px}
   </style>
 </head>
 <body>
   <h2>ESP32 LED Control</h2>
   <label>Device ID (ex: esp1)</label>
   <input id="dev" value="esp1" />
-  <label>Token</label>
-  <input id="tok" placeholder="API_TOKEN" />
   <div>
     <button onclick="sendLed(1)">LED ON</button>
     <button onclick="sendLed(0)">LED OFF</button>
   </div>
   <p id="state">Disconnected</p>
-  <div id="log"></div>
 
 <script>
 let ws;
-function log(s){ document.getElementById('log').textContent += s + "\\n"; }
 function connect(){
-  const tok = document.getElementById('tok').value.trim();
-  if(!tok){ alert("Pune token-ul"); return; }
-  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws?role=controller&token="+encodeURIComponent(tok));
-  ws.onopen=()=>{ document.getElementById('state').textContent="Connected"; log("connected"); };
-  ws.onclose=()=>{ document.getElementById('state').textContent="Disconnected"; log("closed"); };
-  ws.onmessage=(e)=>log("<= "+e.data);
+  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws");
+  ws.onopen=()=>{ document.getElementById('state').textContent="Connected"; };
+  ws.onclose=()=>{ document.getElementById('state').textContent="Disconnected"; };
 }
 function sendLed(v){
   if(!ws || ws.readyState!==1){ connect(); setTimeout(()=>sendLed(v), 400); return; }
   const to = document.getElementById('dev').value.trim();
   ws.send(JSON.stringify({to, cmd:"led", value:v}));
-  log("=> led "+v+" to "+to);
 }
 </script>
 </body>
