@@ -7,6 +7,7 @@
   <style>
     body{font-family:system-ui;margin:24px;max-width:520px}
     button{font-size:18px;padding:12px 18px;margin-right:10px;cursor:pointer}
+    input{font-size:16px;padding:10px;width:100%;margin:10px 0}
   </style>
 </head>
 <body>
@@ -22,15 +23,30 @@
 <script>
 let ws;
 function connect(){
-  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws");
-  ws.onopen=()=>{ document.getElementById('state').textContent="Connected"; };
-  ws.onclose=()=>{ document.getElementById('state').textContent="Disconnected"; };
+  ws = new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/ws?role=controller");
+  ws.onopen = () => {
+    document.getElementById('state').textContent = "Connected";
+  };
+  ws.onclose = () => {
+    document.getElementById('state').textContent = "Disconnected";
+  };
+  ws.onmessage = (e) => {
+    console.log("<= " + e.data);
+  };
 }
-function sendLed(v){
-  if(!ws || ws.readyState!==1){ connect(); setTimeout(()=>sendLed(v), 400); return; }
+
+function sendLed(v) {
+  if (!ws || ws.readyState !== 1) {
+    connect();
+    setTimeout(() => sendLed(v), 400);
+    return;
+  }
   const to = document.getElementById('dev').value.trim();
-  ws.send(JSON.stringify({to, cmd:"led", value:v}));
+  ws.send(JSON.stringify({ to, cmd: "led", value: v }));
+  console.log("=> led " + v + " to " + to);
 }
+
+connect();
 </script>
 </body>
 </html>
